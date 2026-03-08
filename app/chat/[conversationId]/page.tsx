@@ -14,13 +14,18 @@ export default function ConversationPage({ params }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load conversation history on mount / conversation change
   useEffect(() => {
     const fetchMessages = async () => {
-      const res = await fetch(`/api/conversations/${conversationId}`);
-      const data = await res.json();
-      setMessages(data);
+      try {
+        const res = await fetch(`/api/conversations/${conversationId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setMessages(data);
+      } catch (err) {
+        console.error("Failed to fetch messages:", err);
+      }
     };
     fetchMessages();
   }, [conversationId]);
@@ -30,36 +35,41 @@ export default function ConversationPage({ params }: Props) {
     if (!text || loading) return;
 
     setInput("");
+    setError(null);
     setLoading(true);
 
-    // Optimistically add user message
     setMessages((prev) => [...prev, { role: "user", content: text }]);
 
-    const guestId = getOrCreateGuestId();
+    try {
+      const guestId = getOrCreateGuestId();
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, guestId, message: text }),
+      });
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversationId,
-        guestId,
-        message: text,
-      }),
-    });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
 
-    const data = await res.json();
-
-    // Add assistant reply
-    setMessages((prev) => [
-      ...prev,
-      { _id: data.messageId, role: "assistant", content: data.reply },
-    ]);
-    setLoading(false);
+      setMessages((prev) => [
+        ...prev,
+        { _id: data.messageId, role: "assistant", content: data.reply },
+      ]);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      setError("Failed to get a response. Please try again.");
+      setMessages((prev) => prev.slice(0, -1));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <>
       <ChatWindow messages={messages} loading={loading} />
+      {error && (
+        <p className="px-4 py-2 text-center text-xs text-red-400">{error}</p>
+      )}
       <ChatInput
         value={input}
         onChange={setInput}

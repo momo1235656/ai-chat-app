@@ -15,6 +15,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const activeId = pathname.startsWith("/chat/")
     ? pathname.split("/chat/")[1]
@@ -24,9 +25,14 @@ export default function Sidebar() {
     const guestId = getOrCreateGuestId();
     if (!guestId) return;
     try {
+      setError(false);
       const res = await fetch(`/api/conversations?guestId=${guestId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setConversations(data);
+    } catch (err) {
+      console.error("Failed to fetch conversations:", err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -34,17 +40,23 @@ export default function Sidebar() {
 
   useEffect(() => {
     fetchConversations();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   const handleNewChat = async () => {
-    const guestId = getOrCreateGuestId();
-    const res = await fetch("/api/conversations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guestId }),
-    });
-    const conversation = await res.json();
-    router.push(`/chat/${conversation._id}`);
+    try {
+      const guestId = getOrCreateGuestId();
+      const res = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guestId }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const conversation = await res.json();
+      router.push(`/chat/${conversation._id}`);
+    } catch (err) {
+      console.error("Failed to create conversation:", err);
+    }
   };
 
   return (
@@ -76,7 +88,10 @@ export default function Sidebar() {
         {loading && (
           <p className="px-3 py-2 text-xs text-zinc-500">Loading...</p>
         )}
-        {!loading && conversations.length === 0 && (
+        {!loading && error && (
+          <p className="px-3 py-2 text-xs text-red-400">Failed to load. Check server connection.</p>
+        )}
+        {!loading && !error && conversations.length === 0 && (
           <p className="px-3 py-2 text-xs text-zinc-500">No conversations yet.</p>
         )}
         {conversations.map((conv) => (

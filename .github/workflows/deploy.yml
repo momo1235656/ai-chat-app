@@ -5,9 +5,10 @@ on:
     branches: [main]
 
 env:
+  PROJECT_ID: ai-chat-489616
   REGION: asia-northeast1
   SERVICE: ai-chat
-  IMAGE: asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-chat/app
+  IMAGE: asia-northeast1-docker.pkg.dev/ai-chat-489616/ai-chat/app
 
 jobs:
   deploy:
@@ -22,7 +23,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -43,12 +44,14 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.IMAGE }}:${{ github.sha }} .
-          docker tag ${{ env.IMAGE }}:${{ github.sha }} ${{ env.IMAGE }}:latest
+          docker build \
+            -t ${{ env.IMAGE }}:${{ github.sha }} \
+            -t ${{ env.IMAGE }}:latest \
+            .
 
       - name: Push Docker image
         run: |
@@ -62,12 +65,13 @@ jobs:
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars NODE_ENV=production \
-            --set-secrets ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,MONGODB_URI=MONGODB_URI:latest \
+            --min-instances 0 \
+            --set-env-vars "NODE_ENV=production,OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},MONGODB_URI=${{ secrets.MONGODB_URI }}" \
             --quiet
 
       - name: Show deployed URL
         run: |
+          echo "✅ Deployed:"
           gcloud run services describe ${{ env.SERVICE }} \
             --region ${{ env.REGION }} \
             --format "value(status.url)"
