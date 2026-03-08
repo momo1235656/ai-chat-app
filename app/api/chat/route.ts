@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Conversation from "@/models/Conversation";
 import Message from "@/models/Message";
-import { openai, MODEL } from "@/lib/openai";
+import { getOpenAIClient, MODEL } from "@/lib/openai";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }));
 
     // Generate AI response via OpenAI
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAIClient().chat.completions.create({
       model: MODEL,
       messages: [
         { role: "system", content: "You are a helpful general-purpose assistant." },
